@@ -1,13 +1,23 @@
 import os
 import joblib
 import pandas as pd
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template_string, request, jsonify, session, redirect, url_for
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.ensemble import RandomForestRegressor
+from functools import wraps
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'salary-ai-secret-key-change-in-production')
+
+# ============== LOGIN CREDENTIALS ==============
+# Change these if you want
+USERS = {
+    "admin": "admin123",
+    "user": "user123"
+}
+# ==============================================
 
 model_pipeline = None
 
@@ -28,6 +38,15 @@ FEATURE_RANGES = {
 
 ALLOWED_EDUCATION = ["Bachelor's", "Master's", "PhD"]
 ALLOWED_JOB_ROLES = ['HR', 'Software Engineer', 'Analyst', 'Manager', 'Data Scientist']
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 def train_model_from_csv():
@@ -107,6 +126,65 @@ def validate_input(data: dict) -> tuple:
     return True, ""
 
 
+# ==================== LOGIN PAGE ====================
+LOGIN_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Salary AI Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: 'class' }</script>
+    <style>
+        body { background: linear-gradient(-45deg, #0f172a, #1e1b4b, #311042, #090d16); background-size: 400% 400%; animation: gradientBg 15s ease infinite; }
+        @keyframes gradientBg { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        .glass { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.1); }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 text-gray-100">
+    <div class="w-full max-w-md glass rounded-3xl p-8 shadow-2xl">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-extrabold bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">
+                Salary AI Engine
+            </h1>
+            <p class="text-sm text-gray-400 mt-2">Please login to continue</p>
+        </div>
+
+        {% if error %}
+        <div class="mb-4 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-300 text-sm text-center">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/login" class="space-y-5">
+            <div>
+                <label class="block text-sm font-medium mb-2">Username</label>
+                <input type="text" name="username" required autofocus
+                    class="w-full px-4 py-3 rounded-xl bg-gray-900/60 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    placeholder="Enter username">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Password</label>
+                <input type="password" name="password" required
+                    class="w-full px-4 py-3 rounded-xl bg-gray-900/60 border border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    placeholder="Enter password">
+            </div>
+            <button type="submit"
+                class="w-full py-3.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-bold rounded-xl shadow-lg transition-all">
+                Login
+            </button>
+        </form>
+
+        <p class="text-center text-xs text-gray-500 mt-6">
+            Demo: admin / admin123
+        </p>
+    </div>
+</body>
+</html>
+"""
+
+# ==================== MAIN APP PAGE ====================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en" class="dark">
@@ -138,11 +216,16 @@ HTML_TEMPLATE = """
     <div class="w-full max-w-2xl flex justify-between items-center mb-6 z-10">
         <div>
             <h1 class="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">Salary AI Engine</h1>
-            <p class="text-sm text-gray-300 dark:text-gray-400">Advanced ML Compensation Estimator</p>
+            <p class="text-sm text-gray-300 dark:text-gray-400">Welcome, {{ username }}!</p>
         </div>
-        <button id="themeToggle" class="p-3 rounded-full glass hover:bg-white/20 dark:hover:bg-black/30 transition-all btn-active">
-            <span id="themeIcon" class="text-xl">☀️</span>
-        </button>
+        <div class="flex items-center gap-3">
+            <button id="themeToggle" class="p-3 rounded-full glass hover:bg-white/20 dark:hover:bg-black/30 transition-all btn-active">
+                <span id="themeIcon" class="text-xl">☀️</span>
+            </button>
+            <a href="/logout" class="px-4 py-2 rounded-xl glass text-sm font-medium hover:bg-red-500/20 transition-all">
+                Logout
+            </a>
+        </div>
     </div>
 
     <div class="w-full max-w-2xl glass rounded-3xl p-8 shadow-2xl z-10">
@@ -235,9 +318,35 @@ HTML_TEMPLATE = """
 """
 
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if 'username' in session:
+        return redirect(url_for('home'))
+
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        if username in USERS and USERS[username] == password:
+            session['username'] = username
+            return redirect(url_for('home'))
+        else:
+            error = "Invalid username or password"
+
+    return render_template_string(LOGIN_TEMPLATE, error=error)
+
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('login'))
+
+
 @app.route('/')
+@login_required
 def home():
-    return render_template_string(HTML_TEMPLATE)
+    return render_template_string(HTML_TEMPLATE, username=session.get('username', 'User'))
 
 
 @app.route('/health')
@@ -247,6 +356,7 @@ def health():
 
 
 @app.route('/predict', methods=['POST'])
+@login_required
 def predict():
     try:
         data = request.get_json(force=True, silent=True)
