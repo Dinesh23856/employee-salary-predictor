@@ -1,22 +1,42 @@
 # Salary AI Engine
 
-Flask web app that predicts employee salary using Random Forest with numeric + categorical features.
+AI-powered Employee Salary Prediction web application built with Flask and Scikit-learn.
 
 ## Features
-- Years of Experience, Performance Score, Certifications, Work Hours
-- Education Level (Bachelor's / Master's / PhD)
-- Job Role (HR, Software Engineer, Analyst, Manager, Data Scientist)
-- Dark / Light theme
-- Model persistence with joblib
 
-## How to Run
+- Login system (Username + Password)
+- Predict salary based on:
+  - Years of Experience
+  - Performance Score
+  - Certifications Count
+  - Weekly Work Hours
+  - Education Level (Bachelor's / Master's / PhD)
+  - Job Role (HR, Software Engineer, Analyst, Manager, Data Scientist)
+- Dark / Light theme toggle
+- Model persistence using joblib
+- Responsive modern UI
+
+## Login Credentials
+
+| Username | Password   |
+|----------|------------|
+| admin    | admin123   |
+| user     | user123    |
+
+## How to Run Locally
+
 ```bash
+# Create virtual environment
 python -m venv venv
-venv\Scripts\activate          # Windows
-pip install -r requirements.txt
-python app.py
-```
-Open http://127.0.0.1:5000
 
-## Deploy
-Ready for Render / Railway / Heroku (Procfile included).
+# Activate virtual environment
+# Windows:
+venv\Scripts\activate
+# Mac/Linux:
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the app
+python app.py
